@@ -135,15 +135,14 @@ func (w *Writer) WriteHeading(level int, text string) {
 	}
 
 	// Use different font sizes for different heading levels
-	// Level 2 (##) should be noticeably larger than level 3 (###)
 	var size float64
 	switch level {
 	case 1:
-		size = 20.0 // Largest for main sections
+		size = 20.0
 	case 2:
-		size = 16.0 // Medium-large for major subsections
+		size = 16.0
 	case 3:
-		size = 14.0 // Medium for sub-subsections
+		size = 14.0
 	case 4:
 		size = 13.0
 	case 5:
@@ -152,7 +151,7 @@ func (w *Writer) WriteHeading(level int, text string) {
 		size = 12.0
 	}
 
-	// Use custom font - never default fonts
+	// Use custom font
 	w.pdf.SetFont("Mono-BoldItalic", "", size)
 
 	// Check if we need a new page to avoid splitting sections
@@ -178,7 +177,7 @@ func (w *Writer) WriteHeading(level int, text string) {
 	}
 
 	// Check if parent level 2 is on same page (for level 3 headings)
-	// If parent is very low on page and we need to break, be more aggressive
+	// If parent is very low on page and we need to break
 	var shouldBreak bool
 	if level == 3 {
 		currentPage := w.pdf.PageNo()
@@ -250,7 +249,7 @@ func (w *Writer) WriteParagraph(text string) {
 		return
 	}
 
-	// Use custom font - never default fonts
+	// Use custom font
 	w.pdf.SetFont("Mono-Italic", "", 12)
 
 	// Check if paragraph fits on current page, if not, add page break
@@ -286,7 +285,7 @@ func (w *Writer) WriteText(text string) {
 		return
 	}
 
-	// Use custom font - never default fonts
+	// Use custom font
 	w.pdf.SetFont("Mono-Italic", "", 12)
 	w.pdf.Write(6, text)
 }
@@ -296,7 +295,7 @@ func (w *Writer) WriteCode(code string) {
 		return
 	}
 
-	// Use custom font - never default fonts like Courier
+	// Use custom font
 	w.pdf.SetFont("Mono-Italic", "", 11)
 
 	// Check if code block fits on current page
@@ -329,7 +328,7 @@ func (w *Writer) WriteInlineCode(code string) {
 
 	// Light gray background for inline code
 	w.pdf.SetFillColor(245, 245, 245)
-	w.pdf.SetTextColor(0, 0, 0) // Ensure text is black
+	w.pdf.SetTextColor(0, 0, 0)
 
 	// Calculate width of the code text
 	width := w.pdf.GetStringWidth(code) + 4 // Add some padding
@@ -347,7 +346,7 @@ func (w *Writer) WriteInlineCode(code string) {
 	w.pdf.SetFont("Mono-Italic", "", 12)
 }
 
-// WriteThematicBreak renders a horizontal rule with subtle styling (like Microsoft Word)
+// WriteThematicBreak renders a horizontal rule with subtle styling (like Microsoft Word does it)
 func (w *Writer) WriteThematicBreak() {
 	pageWidth, _ := w.pdf.GetPageSize()
 
@@ -421,6 +420,7 @@ func (w *Writer) WriteListItem(text string, marker byte, index int) {
 
 func (w *Writer) WriteImageBytes(title string, path []byte) {
 	// not implemented — later we can allow inline Base64 images
+	// TODO: implement this
 }
 
 func (w *Writer) WriteHighlightedCode(code string, language string) error {
@@ -428,7 +428,7 @@ func (w *Writer) WriteHighlightedCode(code string, language string) error {
 		return nil
 	}
 
-	// Use custom font - never default fonts like Courier
+	// Use custom font
 	w.pdf.SetFont("Mono-Italic", "", 11)
 
 	// Check if code block fits on current page
@@ -460,7 +460,7 @@ func (w *Writer) renderSyntaxHighlightedCode(code string, language string) error
 		lexer = lexers.Fallback
 	}
 
-	// Use GitHub-style theme
+	// Use github-style theme
 	style := styles.Get("github")
 	if style == nil {
 		style = styles.Fallback
