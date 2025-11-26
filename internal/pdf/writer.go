@@ -313,6 +313,37 @@ func (w *Writer) WriteCode(code string) {
 	w.pdf.Ln(3)
 }
 
+func (w *Writer) WriteInlineCode(code string) {
+	if code == "" {
+		return
+	}
+
+	// Save current position
+	x, y := w.pdf.GetXY()
+
+	// Use monospace font for inline code
+	w.pdf.SetFont("Mono-Italic", "", 11)
+
+	// Light gray background for inline code
+	w.pdf.SetFillColor(245, 245, 245)
+	w.pdf.SetTextColor(0, 0, 0) // Ensure text is black
+
+	// Calculate width of the code text
+	width := w.pdf.GetStringWidth(code) + 4 // Add some padding
+
+	// Draw background rectangle
+	w.pdf.Rect(x, y-1, width, 13, "F")
+
+	// Draw the code text
+	w.pdf.Text(x+2, y, code)
+
+	// Move cursor forward
+	w.pdf.SetXY(x+width, y)
+
+	// Restore to default paragraph font
+	w.pdf.SetFont("Mono-Italic", "", 12)
+}
+
 // WriteThematicBreak renders a horizontal rule with subtle styling (like Microsoft Word)
 func (w *Writer) WriteThematicBreak() {
 	pageWidth, _ := w.pdf.GetPageSize()

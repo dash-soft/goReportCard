@@ -95,6 +95,32 @@ func walk(n ast.Node, p *pdf.Writer, src []byte) error {
 			// Don't recurse into code block - we've already extracted all content
 			continue
 
+		case *ast.FencedCodeBlock:
+			// Extract fenced code block content using Lines() method
+			var codeBuf bytes.Buffer
+			lines := node.Lines()
+			if lines != nil {
+				for i := 0; i < lines.Len(); i++ {
+					segment := lines.At(i)
+					codeBuf.Write(segment.Value(src))
+				}
+			}
+			code := codeBuf.String()
+			if code != "" {
+				p.WriteCode(code)
+			}
+			// Don't recurse into fenced code block - we've already extracted all content
+			continue
+
+		case *ast.CodeSpan:
+			// Handle inline code spans
+			code := extractText(node, src)
+			if code != "" {
+				p.WriteInlineCode(code)
+			}
+			// Don't recurse - we've extracted the code content
+			continue
+
 		case *ast.ThematicBreak:
 			// Horizontal rule - render with subtle styling (like Microsoft Word)
 			p.WriteThematicBreak()

@@ -83,6 +83,40 @@ The extracted variables are automatically embedded in the PDF metadata:
 
 This allows PDF viewers and document management systems to properly index and search your reports.
 
+### Code Blocks and Inline Code
+
+Code blocks and inline code are fully supported with appropriate formatting:
+
+#### Code Blocks
+
+Use standard Markdown code blocks with optional language specification:
+
+````markdown
+```javascript
+function greet(name) {
+    console.log(`Hello, ${name}!`);
+}
+```
+
+```bash
+echo "Hello World"
+```
+````
+
+Code blocks are rendered with:
+- Monospace font (Maple Mono)
+- Light gray background
+- Proper line spacing
+
+#### Inline Code
+
+Inline code spans are rendered with:
+- Monospace font
+- Light gray background
+- Appropriate padding
+
+Example: Use `console.log()` for debugging.
+
 ## Examples
 
 See the included example reports:
@@ -104,4 +138,4 @@ go build -o main ./cmd/app
 - PDF metadata embedding (__author__, __date__, __project__)
 - Metadata variable extraction from markdown
 - Professional formatting
-- Support for headings, lists, code blocks, and tables
+- Support for headings, lists, code blocks, inline code, and tables
