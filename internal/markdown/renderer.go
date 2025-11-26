@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"bytes"
+	"html"
 
 	"report/internal/pdf"
 
@@ -17,7 +18,8 @@ func RenderToPDF(n ast.Node, p *pdf.Writer, src []byte) error {
 func extractText(n ast.Node, src []byte) string {
 	var buf bytes.Buffer
 	extractTextRecursive(n, &buf, src)
-	return buf.String()
+	// Decode HTML entities like &nbsp;, &amp;, etc.
+	return html.UnescapeString(buf.String())
 }
 
 func extractTextRecursive(n ast.Node, buf *bytes.Buffer, src []byte) {

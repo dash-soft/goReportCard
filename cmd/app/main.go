@@ -32,6 +32,9 @@ func main() {
 	// Extract metadata variables from markdown
 	mdContent := string(mdBytes)
 
+	// Normalize line endings to LF to ensure consistent parsing across platforms
+	mdContent = strings.ReplaceAll(mdContent, "\r\n", "\n")
+
 	// Extract __author__, __date__, __project__ from the content
 	var author, date, project string
 
@@ -50,7 +53,7 @@ func main() {
 		project = strings.TrimSpace(matches[1])
 	}
 
-	// Convert back to []byte for parsing
+	// Convert back to []byte for parsing (using normalized content)
 	mdBytes = []byte(mdContent)
 
 	// Parse markdown AST
