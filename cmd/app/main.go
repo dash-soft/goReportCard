@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
-	"time"
 
 	"report/internal/markdown"
 	"report/internal/pdf"
@@ -29,24 +29,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Insert metadata if needed
+	// Extract metadata variables from markdown
 	mdContent := string(mdBytes)
 
-	if !strings.Contains(mdContent, "{{name}}") {
-		mdContent = "Name: Automatically Inserted\n\n" + mdContent
-	}
-	if !strings.Contains(mdContent, "{{date}}") {
-		mdContent = "Datum: " + time.Now().Format("02.01.2006") + "\n\n" + mdContent
-	}
+	// Extract __author__, __date__, __project__ from the content
+	var author, date, project string
 
-	// Replace tags
-	userName := os.Getenv("USER")
-	if userName == "" {
-		userName = "Unknown User"
-	}
+	// Use regex to find the variables
+	authorRegex := regexp.MustCompile(`__author__\s*:\s*(.+)`)
+	dateRegex := regexp.MustCompile(`__date__\s*:\s*(.+)`)
+	projectRegex := regexp.MustCompile(`__project__\s*:\s*(.+)`)
 
-	mdContent = strings.ReplaceAll(mdContent, "{{name}}", userName)
-	mdContent = strings.ReplaceAll(mdContent, "{{date}}", time.Now().Format("02.01.2006"))
+	if matches := authorRegex.FindStringSubmatch(mdContent); len(matches) > 1 {
+		author = strings.TrimSpace(matches[1])
+	}
+	if matches := dateRegex.FindStringSubmatch(mdContent); len(matches) > 1 {
+		date = strings.TrimSpace(matches[1])
+	}
+	if matches := projectRegex.FindStringSubmatch(mdContent); len(matches) > 1 {
+		project = strings.TrimSpace(matches[1])
+	}
 
 	// Convert back to []byte for parsing
 	mdBytes = []byte(mdContent)
@@ -67,6 +69,9 @@ func main() {
 
 	// Prepare PDF writer
 	w := pdf.NewWriter()
+
+	// Set PDF metadata
+	w.SetMetadata(author, date, project)
 
 	// Render markdown → PDF
 	err = markdown.RenderToPDF(doc, w, mdBytes)

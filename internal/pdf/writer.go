@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"time"
 
 	"github.com/jung-kurt/gofpdf"
 )
@@ -18,6 +22,10 @@ type Writer struct {
 	lastHeadingLevel int      // Track last heading level to detect section boundaries
 	lastLevel2Y      float64  // Track Y position of last level 2 heading
 	lastLevel2Page   int      // Track page number of last level 2 heading
+	// PDF metadata
+	author  string
+	date    string
+	project string
 }
 
 func NewWriter() *Writer {
@@ -86,6 +94,26 @@ func NewWriter() *Writer {
 		p.ImageOptions("logo", logoX, logoY, logoWidth, logoHeight, false, opt, 0, "")
 	})
 
+	// Get system metadata for footer
+	systemInfo := getSystemMetadata()
+
+	// Set footer function to display system metadata on every page
+	p.SetFooterFunc(func() {
+		// Use custom font - never default fonts
+		p.SetFont("Mono-Italic", "", 9)
+
+		// Get page dimensions
+		pageWidth, pageHeight := p.GetPageSize()
+
+		// Position footer text at bottom center
+		footerY := pageHeight - 15.0 // 15mm from bottom
+		footerText := "Report generated on: " + systemInfo + " - " + time.Now().Format("02.01.2006")
+
+		// Center the text
+		p.SetXY(0, footerY)
+		p.CellFormat(pageWidth, 5, footerText, "", 0, "C", false, 0, "")
+	})
+
 	// Add first page
 	p.AddPage()
 
@@ -130,67 +158,69 @@ func (w *Writer) WriteHeading(level int, text string) {
 	marginBottom := 20.0 // Bottom margin
 	remainingSpace := pageHeight - y - marginBottom
 
-	// Be very aggressive about keeping sections together
-	// Calculate threshold: if we're in the bottom portion of the page, start new page
-	// For level 2 headings, be more conservative since level 3 might follow
-	// For subsections (level 3+), be even more aggressive
-	var thresholdY float64
+	// Calculate minimum space needed for the heading and its content
+	// Only break when we actually don't have enough space, not just based on position
 	var minSpaceNeeded float64
 
 	if level == 2 {
-		// Level 2: be EXTREMELY aggressive to leave room for potential level 3 subsections
-		// Break early (at 40% of page) to ensure parent+child stay together
-		// This prevents orphaned level 2 headings when level 3 needs a new page
-		thresholdY = pageHeight * 0.40 // 40% down - break very early
-		minSpaceNeeded = 120.0         // Need lots of space for level 2 + at least one level 3 + content
+		// Level 2: need space for heading + potential level 3 subsection + content
+		minSpaceNeeded = 100.0 // Conservative estimate
 	} else if level == 3 {
-		// Level 3: be aggressive, and check if parent level 2 is on same page
-		thresholdY = pageHeight * 0.55 // 55% down for subsections
-		minSpaceNeeded = 70.0          // Subsections need substantial space
+		// Level 3: need space for heading + content
+		minSpaceNeeded = 60.0
+	} else if level == 1 {
+		minSpaceNeeded = 80.0
+	} else {
+		minSpaceNeeded = 40.0
+	}
 
-		// Check if parent level 2 is on the same page and near bottom
-		// Only apply aggressive breaking if we actually don't have enough space
+	// Check if parent level 2 is on same page (for level 3 headings)
+	// If parent is very low on page and we need to break, be more aggressive
+	var shouldBreak bool
+	if level == 3 {
 		currentPage := w.pdf.PageNo()
 		if w.lastLevel2Page == currentPage && w.lastLevel2Y > 0 {
-			// First check if we actually need to break (not enough space)
-			needsBreak := y > thresholdY || remainingSpace < minSpaceNeeded
+			// Check if we actually need to break
+			needsBreakBySpace := remainingSpace < minSpaceNeeded
 
-			if needsBreak {
-				// We need to break - now check if parent is low on page
-				// If parent is in bottom 40% of page, be more aggressive to keep them together
-				if w.lastLevel2Y > pageHeight*0.40 {
-					// Parent is very low on page, break immediately to keep parent+child together
-					thresholdY = 0.0 // Break immediately
-					minSpaceNeeded = 80.0
-				} else if w.lastLevel2Y > pageHeight*0.30 {
-					// Parent is low on page, be more aggressive
-					thresholdY = pageHeight * 0.30 // Break earlier
-					minSpaceNeeded = 85.0
+			if needsBreakBySpace {
+				// We need to break - check if parent is low on page
+				// If parent is in bottom 50% of page, break to keep them together
+				if w.lastLevel2Y > pageHeight*0.50 {
+					// Parent is low, definitely break to keep parent+child together
+					shouldBreak = true
+				} else if w.lastLevel2Y > pageHeight*0.40 && remainingSpace < minSpaceNeeded*1.2 {
+					// Parent is getting low and space is tight, break
+					shouldBreak = true
+				} else {
+					// Parent is fine, just break if we need space
+					shouldBreak = remainingSpace < minSpaceNeeded
 				}
+			} else {
+				// We have enough space, don't break
+				shouldBreak = false
 			}
-			// If we have enough space, don't apply aggressive breaking - just use normal thresholds
+		} else {
+			// No parent on this page, just check space
+			shouldBreak = remainingSpace < minSpaceNeeded
 		}
-	} else if level == 1 {
-		thresholdY = pageHeight * 0.60
-		minSpaceNeeded = 90.0
 	} else {
-		thresholdY = pageHeight * 0.60
-		minSpaceNeeded = 50.0
+		// For other levels, only break if we don't have enough space
+		// Use position as a secondary check only when space is borderline
+		shouldBreak = remainingSpace < minSpaceNeeded
+
+		// For level 2, also check position if space is borderline (within 20% of min needed)
+		if level == 2 && remainingSpace < minSpaceNeeded*1.2 {
+			// Space is tight - check if we're in bottom portion of page
+			if y > pageHeight*0.65 {
+				// We're in bottom 35% and space is tight, break
+				shouldBreak = true
+			}
+		}
 	}
 
 	// Add spacing before heading (except for first heading)
 	if y > 40 { // Not at the very top
-		// Start new page if:
-		// 1. We're past the threshold position on the page (or threshold is 0 for immediate break), OR
-		// 2. We don't have enough remaining space
-		shouldBreak := false
-		if thresholdY == 0.0 {
-			// Immediate break requested (for level 3 when parent is orphaned)
-			shouldBreak = true
-		} else {
-			shouldBreak = y > thresholdY || remainingSpace < minSpaceNeeded
-		}
-
 		if shouldBreak {
 			w.pdf.AddPage()
 		} else {
@@ -359,11 +389,139 @@ func (w *Writer) WriteImageBytes(title string, path []byte) {
 	// not implemented — later we can allow inline Base64 images
 }
 
+// SetMetadata sets the PDF metadata fields
+func (w *Writer) SetMetadata(author, date, project string) {
+	w.author = author
+	w.date = date
+	w.project = project
+}
+
 func (w *Writer) Save(path string) error {
+	// Set PDF metadata before saving
+	if w.author != "" {
+		w.pdf.SetAuthor(w.author, true)
+	}
+	if w.date != "" {
+		w.pdf.SetCreationDate(time.Now())
+		// Note: gofpdf doesn't have a direct SetDate method, but we can use SetTitle to include date info
+	}
+	if w.project != "" {
+		w.pdf.SetTitle(w.project, true)
+		w.pdf.SetSubject(fmt.Sprintf("Project: %s", w.project), true)
+	}
+
 	err := w.pdf.OutputFileAndClose(path)
 	// Clean up temporary font files
 	for _, tempFile := range w.tempFiles {
 		os.Remove(tempFile)
 	}
 	return err
+}
+
+// getSystemMetadata returns OS-specific system information for the footer
+func getSystemMetadata() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return getMacOSMetadata()
+	case "linux":
+		return getLinuxMetadata()
+	case "windows":
+		return "Microsoft Windows"
+	default:
+		return runtime.GOOS
+	}
+}
+
+// getMacOSMetadata returns macOS version and Mac model
+func getMacOSMetadata() string {
+	var version, model string
+
+	// Get macOS version using sw_vers
+	if cmd := exec.Command("sw_vers", "-productVersion"); cmd != nil {
+		if output, err := cmd.Output(); err == nil {
+			version = strings.TrimSpace(string(output))
+		}
+	}
+
+	// Get Mac model using system_profiler
+	if cmd := exec.Command("system_profiler", "SPHardwareDataType"); cmd != nil {
+		if output, err := cmd.Output(); err == nil {
+			lines := strings.Split(string(output), "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "Model Name:") || strings.Contains(line, "Model Identifier:") {
+					parts := strings.Split(line, ":")
+					if len(parts) > 1 {
+						model = strings.TrimSpace(parts[1])
+						// Prefer Model Name over Model Identifier
+						if strings.Contains(line, "Model Name:") {
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback if model not found
+	if model == "" {
+		if cmd := exec.Command("sysctl", "-n", "hw.model"); cmd != nil {
+			if output, err := cmd.Output(); err == nil {
+				model = strings.TrimSpace(string(output))
+			}
+		}
+	}
+
+	if version != "" && model != "" {
+		return fmt.Sprintf("macOS %s %s", version, model)
+	} else if version != "" {
+		return fmt.Sprintf("macOS %s", version)
+	} else if model != "" {
+		return fmt.Sprintf("macOS on %s", model)
+	}
+	return "macOS"
+}
+
+// getLinuxMetadata returns Linux distribution information
+func getLinuxMetadata() string {
+	// Try to read /etc/os-release first (most common)
+	if data, err := os.ReadFile("/etc/os-release"); err == nil {
+		lines := strings.Split(string(data), "\n")
+		var name, version string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "PRETTY_NAME=") {
+				value := strings.TrimPrefix(line, "PRETTY_NAME=")
+				value = strings.Trim(value, "\"")
+				return value
+			}
+			if strings.HasPrefix(line, "NAME=") {
+				name = strings.TrimPrefix(line, "NAME=")
+				name = strings.Trim(name, "\"")
+			}
+			if strings.HasPrefix(line, "VERSION=") {
+				version = strings.TrimPrefix(line, "VERSION=")
+				version = strings.Trim(version, "\"")
+			}
+		}
+		if name != "" {
+			if version != "" {
+				return fmt.Sprintf("%s %s", name, version)
+			}
+			return name
+		}
+	}
+
+	// Fallback to /etc/issue
+	if data, err := os.ReadFile("/etc/issue"); err == nil {
+		line := strings.TrimSpace(string(data))
+		// Remove escape sequences and newlines
+		line = strings.ReplaceAll(line, "\\n", "")
+		line = strings.ReplaceAll(line, "\\l", "")
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line
+		}
+	}
+
+	// Last resort
+	return "Linux"
 }
