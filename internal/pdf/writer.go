@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/jung-kurt/gofpdf"
 )
 
@@ -419,6 +422,122 @@ func (w *Writer) WriteListItem(text string, marker byte, index int) {
 func (w *Writer) WriteImageBytes(title string, path []byte) {
 	// not implemented — later we can allow inline Base64 images
 }
+
+func (w *Writer) WriteHighlightedCode(code string, language string) error {
+	if code == "" {
+		return nil
+	}
+
+	// Use custom font - never default fonts like Courier
+	w.pdf.SetFont("Mono-Italic", "", 11)
+
+	// Check if code block fits on current page
+	_, y := w.pdf.GetXY()
+	_, pageHeight := w.pdf.GetPageSize()
+	marginBottom := 20.0
+	remainingSpace := pageHeight - y - marginBottom
+
+	// Estimate height needed (rough estimate)
+	estimatedHeight := 20.0
+	if remainingSpace < estimatedHeight {
+		w.pdf.AddPage()
+	}
+
+	// Apply syntax highlighting using chroma
+	return w.renderSyntaxHighlightedCode(code, language)
+}
+
+// renderSyntaxHighlightedCode uses chroma to highlight code and render with colors
+func (w *Writer) renderSyntaxHighlightedCode(code string, language string) error {
+	// Get lexer for the language
+	lexer := lexers.Get(language)
+	if lexer == nil {
+		// Fallback to auto-detection
+		lexer = lexers.Analyse(code)
+	}
+	if lexer == nil {
+		// Ultimate fallback - treat as plain text
+		lexer = lexers.Fallback
+	}
+
+	// Use GitHub-style theme
+	style := styles.Get("github")
+	if style == nil {
+		style = styles.Fallback
+	}
+
+	// Tokenize the code
+	iterator, err := lexer.Tokenise(nil, code)
+	if err != nil {
+		// Fallback to plain text rendering
+		w.pdf.SetTextColor(0, 0, 0)
+		w.pdf.MultiCell(0, 6, code, "", "L", false)
+		return nil
+	}
+
+	// Render each token with appropriate color
+	for {
+		token := iterator()
+		if token == chroma.EOF {
+			break
+		}
+
+		// Get color for token type
+		r, g, b := w.getChromaColor(style, token.Type)
+
+		// Set color
+		w.pdf.SetTextColor(r, g, b)
+
+		// Write token value
+		value := string(token.Value)
+		if value == "\n" {
+			w.pdf.Ln(6)
+		} else {
+			w.pdf.Write(6, value)
+		}
+	}
+
+	return nil
+}
+
+// getChromaColor returns RGB color for a chroma token type
+func (w *Writer) getChromaColor(style *chroma.Style, tokenType chroma.TokenType) (r, g, b int) {
+	// Get the style entry for this token type
+	entry := style.Get(tokenType)
+	if entry.Colour.IsSet() {
+		// Convert chroma.Color to RGB values
+		color := entry.Colour
+		r = int(color.Red())
+		g = int(color.Green())
+		b = int(color.Blue())
+		return r, g, b
+	}
+
+	// Fallback colors based on token type
+	switch tokenType {
+	case chroma.Keyword:
+		return 0, 0, 255 // Blue
+	case chroma.String:
+		return 0, 128, 0 // Green
+	case chroma.Number:
+		return 255, 0, 0 // Red
+	case chroma.Comment, chroma.CommentSingle, chroma.CommentMultiline:
+		return 128, 128, 128 // Gray
+	case chroma.NameFunction:
+		return 0, 0, 128 // Dark blue
+	case chroma.NameClass:
+		return 0, 100, 200 // Light blue
+	case chroma.NameVariable:
+		return 139, 69, 19 // Brown
+	case chroma.Literal:
+		return 255, 69, 0 // Orange red
+	case chroma.NameBuiltin:
+		return 0, 100, 0 // Dark green
+	default:
+		return 0, 0, 0 // Black
+	}
+}
+
 
 // SetMetadata sets the PDF metadata fields
 func (w *Writer) SetMetadata(author, date, project string) {

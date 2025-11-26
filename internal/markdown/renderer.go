@@ -50,6 +50,29 @@ func extractTextRecursive(n ast.Node, buf *bytes.Buffer, src []byte) {
 	}
 }
 
+
+// getSyntaxHighlightColor returns color for a CSS class
+func getSyntaxHighlightColor(class string) (r, g, b int) {
+	switch class {
+	case "hljs-keyword":
+		return 0, 0, 255 // Blue
+	case "hljs-string":
+		return 0, 128, 0 // Green
+	case "hljs-number":
+		return 255, 0, 0 // Red
+	case "hljs-comment":
+		return 128, 128, 128 // Gray
+	case "hljs-function":
+		return 0, 0, 128 // Dark blue
+	case "hljs-type":
+		return 0, 100, 200 // Light blue
+	case "hljs-variable":
+		return 139, 69, 19 // Brown
+	default:
+		return 0, 0, 0 // Black
+	}
+}
+
 func walk(n ast.Node, p *pdf.Writer, src []byte) error {
 	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
 		switch node := child.(type) {
@@ -90,7 +113,14 @@ func walk(n ast.Node, p *pdf.Writer, src []byte) error {
 			}
 			code := codeBuf.String()
 			if code != "" {
-				p.WriteCode(code)
+			// Get language from code block attributes if available
+			language := ""
+			if lang, exists := node.AttributeString("lang"); exists {
+				if langStr, ok := lang.(string); ok {
+					language = langStr
+				}
+			}
+				p.WriteHighlightedCode(code, language)
 			}
 			// Don't recurse into code block - we've already extracted all content
 			continue
@@ -107,7 +137,9 @@ func walk(n ast.Node, p *pdf.Writer, src []byte) error {
 			}
 			code := codeBuf.String()
 			if code != "" {
-				p.WriteCode(code)
+				// Get language from fenced code block (e.g., ```javascript)
+				language := string(node.Language(src))
+				p.WriteHighlightedCode(code, language)
 			}
 			// Don't recurse into fenced code block - we've already extracted all content
 			continue
@@ -157,6 +189,7 @@ func walk(n ast.Node, p *pdf.Writer, src []byte) error {
 			}
 			// Don't recurse - we've extracted all text
 			continue
+
 		}
 
 		// Recursively process children for nested structures
