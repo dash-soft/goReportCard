@@ -127,8 +127,62 @@ See the included example reports:
 ## Building
 
 ```bash
-go build -o main ./cmd/app
+go build -o report ./cmd/app
 ```
+
+Or use the Makefile:
+
+```bash
+make build
+```
+
+## Development
+
+### Prerequisites
+
+- Go 1.21 or later
+- Make (optional, for using the Makefile)
+
+### Development Setup
+
+```bash
+make dev-setup    # Install dependencies and development tools
+make dev          # Run with live reload (requires air)
+make build        # Build the binary
+make fmt          # Format code
+make vet          # Run go vet
+make check        # Run all checks (formatting, vet)
+make clean        # Clean build artifacts
+make example      # Generate example PDF from showcase.md
+```
+
+### Code Quality
+
+```bash
+make fmt          # Format code
+make vet          # Run go vet
+make check-fmt    # Check formatting
+```
+
+## CI/CD
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+### Build Verification
+- Runs on every push and pull request to main/master
+- Builds against multiple Go versions (1.21.x, 1.22.x, 1.23.x)
+- Runs on Ubuntu, macOS, and Windows
+- Includes code formatting and static analysis checks
+- Verifies that the binary can successfully generate PDFs
+
+### Releases
+- Triggered by pushing tags starting with `v*`
+- Builds binaries for:
+  - Linux (amd64, arm64)
+  - macOS (amd64, arm64)
+  - Windows (amd64, 386)
+- Creates GitHub releases with downloadable binaries
+- Includes SHA256 checksums
 
 ## Features
 
@@ -139,3 +193,5 @@ go build -o main ./cmd/app
 - Metadata variable extraction from markdown
 - Professional formatting
 - Support for headings, lists, code blocks, inline code, and tables
+- Syntax highlighting for code blocks
+- Cross-platform CI/CD

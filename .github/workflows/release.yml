@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.21.x
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Build for Linux (amd64)
+      run: |
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o report-linux-amd64 ./cmd/app
+        tar -czf report-linux-amd64.tar.gz report-linux-amd64
+
+    - name: Build for Linux (arm64)
+      run: |
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o report-linux-arm64 ./cmd/app
+        tar -czf report-linux-arm64.tar.gz report-linux-arm64
+
+    - name: Build for macOS (amd64)
+      run: |
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o report-darwin-amd64 ./cmd/app
+        tar -czf report-darwin-amd64.tar.gz report-darwin-amd64
+
+    - name: Build for macOS (arm64)
+      run: |
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o report-darwin-arm64 ./cmd/app
+        tar -czf report-darwin-arm64.tar.gz report-darwin-arm64
+
+    - name: Build for Windows (amd64)
+      run: |
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o report-windows-amd64.exe ./cmd/app
+        zip report-windows-amd64.zip report-windows-amd64.exe
+
+    - name: Build for Windows (386)
+      run: |
+        GOOS=windows GOARCH=386 go build -ldflags="-s -w" -o report-windows-386.exe ./cmd/app
+        zip report-windows-386.zip report-windows-386.exe
+
+    - name: Create checksums
+      run: |
+        sha256sum report-*.tar.gz report-*.zip > checksums.txt
+        cat checksums.txt
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          report-linux-amd64.tar.gz
+          report-linux-arm64.tar.gz
+          report-darwin-amd64.tar.gz
+          report-darwin-arm64.tar.gz
+          report-windows-amd64.zip
+          report-windows-386.zip
+          checksums.txt
+        generate_release_notes: true

@@ -22,7 +22,7 @@ func main() {
 	inputPath := os.Args[1]
 	outputPath := os.Args[2]
 
-	// Read markdown
+	// Read the Markdown
 	mdBytes, err := os.ReadFile(inputPath)
 	if err != nil {
 		fmt.Printf("Failed to read markdown file: %v\n", err)
