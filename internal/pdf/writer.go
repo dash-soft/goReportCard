@@ -538,7 +538,6 @@ func (w *Writer) getChromaColor(style *chroma.Style, tokenType chroma.TokenType)
 	}
 }
 
-
 // SetMetadata sets the PDF metadata fields
 func (w *Writer) SetMetadata(author, date, project string) {
 	w.author = author

@@ -50,7 +50,6 @@ func extractTextRecursive(n ast.Node, buf *bytes.Buffer, src []byte) {
 	}
 }
 
-
 // getSyntaxHighlightColor returns color for a CSS class
 func getSyntaxHighlightColor(class string) (r, g, b int) {
 	switch class {
@@ -113,13 +112,13 @@ func walk(n ast.Node, p *pdf.Writer, src []byte) error {
 			}
 			code := codeBuf.String()
 			if code != "" {
-			// Get language from code block attributes if available
-			language := ""
-			if lang, exists := node.AttributeString("lang"); exists {
-				if langStr, ok := lang.(string); ok {
-					language = langStr
+				// Get language from code block attributes if available
+				language := ""
+				if lang, exists := node.AttributeString("lang"); exists {
+					if langStr, ok := lang.(string); ok {
+						language = langStr
+					}
 				}
-			}
 				p.WriteHighlightedCode(code, language)
 			}
 			// Don't recurse into code block - we've already extracted all content
